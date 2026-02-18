@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard</title>
+
+    <!-- Chart -->
+    <script>
+        window.onload = function () {
+            const info = document.getElementById('information');
+            info.textContent = '[INFO] Loading...';
+            // 順番に読み込み中：Chart.js -> Date Adapter -> Zoom Plugin -> コールバック
+            loadChartDependencies(function () {
+                console.log("Chartの依存関係の準備が完了しました。インターフェースをアクティブ化しています...");
+                loadMainScripts();
+            });
+        };
+
+        // 1. Chart とその依存関係を読み込み中 (シリアル読み込み)
+        function loadChartDependencies(callback) {
+            const params = new URLSearchParams(window.location.search);
+            const chartUrl = params.get("chart") || "/Research/chart.umd.js" || "https://cdn.jsdelivr.net/npm/chart.js";
+            const adapterUrl = params.get("dateAdapter") || "/Research/chartjs-adapter-date-fns.bundle.min.js" || "https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js";
+            const zoomUrl = params.get("chartZoom") || "/Research/chartjs-plugin-zoom.js" || "https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom/dist/chartjs-plugin-zoom.min.js";
+
+            if (!chartUrl || !adapterUrl || !zoomUrl) {
+                console.error("URLパラメータにチャートライブラリがありません。");
+                return;
+            }
+
+            loadScript(chartUrl, "Chart.js core", function() {
+                loadScript(adapterUrl, "Date adapter", function() {
+                    loadScript(zoomUrl, "Zoom plugin", function() {
+                        if (callback) callback();
+                    });
+                });
+            });
+        }
+
+        // 2. ビジネスロジックスクリプトを読み込み中 (依存関係は並行読み込み、最後にメインを読み込み)
+        function loadMainScripts() {
+            const params = new URLSearchParams(window.location.search);
+            const mainUrl = params.get("main") || "/Research/main.js";
+            const statisticsUtilsUrl = params.get("statisticsUtils") || "/Research/StatisticsUtils.js";
+            const supabaseUrl = params.get("supabase") || "/Research/app_config.js";
+            const supabaseJSUrl = params.get("supabaseJS") || "/Research/supabase.js" || "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+            
+
+            if (statisticsUtilsUrl && supabaseUrl && supabaseJSUrl) {
+                Promise.all([
+                    loadScriptPromise(statisticsUtilsUrl),
+                    loadScriptPromise(supabaseUrl),
+                    loadScriptPromise(supabaseJSUrl)
+                ]).then(() => {
+                    if (mainUrl) {
+                        const mainScript = document.createElement("script");
+                        mainScript.type = "module";
+                        mainScript.src = mainUrl;
+                        document.body.appendChild(mainScript);
+                        console.log("メインシステムが起動しました。");
+                    }
+                }).catch(err => console.error("重要なスクリプトの読み込みに失敗しました：", err));
+            }
+        }
+
+        // 補助関数：通常コールバック式
+        function loadScript(src, name, onLoadCallback) {
+            const script = document.createElement("script");
+            script.src = src;
+            script.onload = () => { console.log(name + " loaded."); onLoadCallback(); };
+            script.onerror = () => console.error("Failed to load " + name);
+            document.head.appendChild(script);
+        }
+
+        // 補助関数：Promise式
+        function loadScriptPromise(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        function enableInterface() {
+            const controls = ['metric', 'calFunction', 'duration', 'start', 'end', 'load', 'reset','myChart', 'statisticsInfo'];
+            controls.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = false;
+            });
+            handleResponsiveLayout();
+        }
+
+        function handleResponsiveLayout() {
+            const panel = document.querySelector('section.grid');
+            if (!panel) return;
+            const updateGrid = () => {
+                const width = window.innerWidth;
+                panel.classList.remove('grid-cols-1', 'grid-cols-2', 'grid-cols-3', 'grid-cols-4');
+                if (width < 768) {
+                    panel.classList.add('grid-cols-1');
+                } else if (width < 1024) {
+                    panel.classList.add('grid-cols-2');
+                } else {
+                    panel.classList.add('grid-cols-4');
+                }
+            };
+            updateGrid();
+            // ウィンドウサイズの変更を監視します（resizeイベントよりも ResizeObserver の方が効率的です）
+            window.addEventListener('resize', updateGrid);
+        }
+
+    </script>
+
+
+    <!-- UI -->
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const tailwindUrl = params.get("tailwind") || "/Research/tailwind-v3.css" || "https://cdn.tailwindcss.com";
+
+        if (tailwindUrl) {
+            const link = document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = tailwindUrl;
+            document.head.appendChild(link);
+        }
+    </script>
+
+    <style>
+        .label {
+            font-size: clamp(0.7rem, 0.6vw, 0.8rem);
+            color: #94a3b8;
+        }
+        .input {
+            width: 100%;
+            margin-top: 0.25rem;
+            padding: 0 0.75rem;
+            height: clamp(2.3rem, 3vw, 2.8rem);
+            font-size: clamp(0.85rem, 0.9vw, 1rem);
+            background: #334155;
+            border-radius: 0.5rem;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            appearance: none;
+        }
+        input:disabled,
+        select:disabled,
+        button:disabled {cursor: not-allowed;}
+
+        /* 基础样式：确保 body 撑满且颜色切换平滑 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            transition: box-shadow 0.3s ease; /* 让边框出现时有渐变效果 */
+        }
+
+        /* 报警状态：网页外围出现红色内阴影边框 */
+        .alert-active {
+            /* inset 表示内阴影，10px 是宽度，可根据需要调整 */
+            box-shadow: inset 0 0 0 10px #ef4444 !important;
+        }
+
+    </style>
+</head>
+
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <div class="max-w-6xl mx-auto p-6 space-y-6">
+        <span class="text-slate-400 text-sm font-semibold uppercase tracking-widest">可視化システム（防災ガジェット）プロトタイプ</span>
+        <header class="flex items-center justify-between">
+            <h1 class="text-3xl font-bold">📊 解析ダッシュボード</h1>
+            <span class="text-sm text-slate-400">信州大学DX推進センター · Supabase · Chart.js</span>
+        </header>
+
+        <!-- Control Panel -->
+        <section class="bg-slate-800 rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-stretch">
+            <div>
+                <label class="label">1. 対象</label>
+                <select id="metric" class="input" disabled>
+                    <option value="temperature">温度</option>
+                    <option value="humidity">湿度</option>
+                    <option value="pressure">気圧</option>
+                    <option value="rainfall">雨量（未実装）</option>
+                    <option value="waterLevel">水位（未実装）</option>
+                    <option value="rssi">受信電力</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="label">2. 関数</label>
+                <select id="calFunction" class="input" disabled>
+                    <option value="realTime">時系列（ライブ）</option>
+                    <option value="timeSeries">時系列（過去）</option>
+                    <option value="dis_CDF">累積確率分布</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-2 w-full" style="box-sizing: border-box;">
+                <div class="w-full">
+                    <label class="label">3. 期間</label>
+                    <select id="duration" class="input" style="box-sizing: border-box;" disabled>
+                        <option value="fixable">指定</option>
+                        <option value="oneDay">24時間</option>
+                        <option value="oneWeek">1週間</option>
+                        <option value="oneMonth">1月</option>
+                    </select>
+                </div>
+
+                <div class="w-full">
+                    <label class="label">開始日時</label>
+                    <input id="start" type="datetime-local" class="input" style="box-sizing: border-box;" disabled/>
+                </div>
+
+                <div class="w-full">
+                    <label class="label">終了日時</label>
+                    <input id="end" type="datetime-local" class="input" style="box-sizing: border-box;" disabled/>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <label class="label">4. 動作</label>
+                <button id="load" class="relative h-11 px-6 font-bold rounded-lg bg-cyan-500 text-black hover:bg-cyan-400 transition disabled:opacity-50 glow overflow-hidden" disabled>
+                    <span id="btn-text">Load Data</span>
+                    <span id="spinner" class="absolute inset-0 hidden items-center justify-center">
+                        <svg class="animate-spin h-5 w-5 text-black" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                        </svg>
+                    </span>
+                </button>
+
+                <button id="reset" class="h-11 px-6 font-bold text-black rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition" disabled>
+                    Reset
+                </button>
+
+                <button id="toggle-wake-lock" class="h-11 px-6 font-bold rounded-lg bg-amber-500 text-black hover:bg-amber-400 transition flex items-center justify-center gap-2">
+                    <span id="wake-status-dot" class="w-2 h-2 rounded-full bg-slate-800"></span>
+                    <span id="wake-text">Enable Keep-Alive Mode</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Information -->
+        <div id="information" class="text-sm text-slate-400"></div>
+
+        <!-- Chart -->
+        <div class="chart-container" style="position: relative; width: 100%; aspect-ratio: 80 / 56.56;" disabled>
+            <canvas id="myChart"></canvas>
+        </div>
+
+        <!-- StatisticsInfo -->
+        <div id="statisticsInfo" class="text-lg text-slate-400" disabled></div>
+        
+    </div>
+
+    <footer class="fixed bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-md py-2 text-center border-t border-slate-800">
+    <p class="text-slate-400 text-xs">
+        &copy; <span id="current-year"></span> ブイアールコネクト株式会社. All Rights Reserved.
+    </p>
+    </footer>
+
+    <script>
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+    </script>
+
+    <script>
+        let wakeLock = null;
+        let isManualEnabled = false; 
+
+        const wakeBtn = document.getElementById('toggle-wake-lock');
+        const wakeText = document.getElementById('wake-text');
+        const wakeDot = document.getElementById('wake-status-dot');
+
+        async function toggleWakeLock() {
+            // 既にロックが取得されている場合は、ユーザーが手動で閉じようとしていることを意味します
+            if (isManualEnabled) {
+                if (wakeLock) {
+                    await wakeLock.release();
+                    wakeLock = null;
+                }
+                isManualEnabled = false;
+                updateUI(false);
+            } else {
+                // ユーザーが手動で有効にしたい
+                isManualEnabled = true;
+                await requestLock();
+            }
+        }
+
+        // 再利用しやすいように、独立した関数にカプセル化する
+        async function requestLock() {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                updateUI(true);
+                
+                // 解放の監視
+                wakeLock.addEventListener('release', () => {
+                    console.log('ウェイクロックが解放されました。');
+                    // 注意：解放時に即座に updateUI(false) を呼び出さないでください。バックグラウンド移行による解放の場合は、復帰時に自動更新したいためです。
+                });
+            } catch (err) {
+                console.error(`${err.name}, ${err.message}`);
+                // 手動での有効化に失敗した場合のみエラーを報告する
+                if (isManualEnabled) {
+                    isManualEnabled = false;
+                    updateUI(false);
+                }
+            }
+        }
+
+        function updateUI(isActive) {
+            if (isActive) {
+                wakeBtn.classList.replace('bg-amber-500', 'bg-green-500');
+                wakeDot.classList.replace('bg-slate-800', 'bg-white');
+                wakeText.innerText = "Keep-Alive Active";
+            } else {
+                wakeBtn.classList.replace('bg-green-500', 'bg-amber-500');
+                wakeDot.classList.replace('bg-white', 'bg-slate-800');
+                wakeText.innerText = "Enable Keep-Alive Mode";
+            }
+        }
+
+        wakeBtn.addEventListener('click', toggleWakeLock);
+
+        document.addEventListener('visibilitychange', async () => {
+            // ユーザーが以前にスイッチをオンにしていて、かつページがフォアグラウンドに戻った場合
+            if (isManualEnabled && document.visibilityState === 'visible') {
+                console.log('フォアグラウンド復帰を検知、自動更新中...');
+                // 新しいロックオブジェクトを再取得する必要があります。
+                await requestLock();
+            }
+        });
+    </script>
+
+</body>
+</html>
