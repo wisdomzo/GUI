@@ -84,7 +84,26 @@
         }
 
         function enableInterface() {
-            const controls = ['metric', 'calFunction', 'duration', 'start', 'end', 'load', 'reset','myChart', 'statisticsInfo'];
+            const controls = ['metric', 
+                'calFunction', 
+                'duration', 
+                'start', 
+                'end', 
+                'load', 
+                'reset',
+                'myChart', 
+                'statisticsInfo', 
+                'temperatureBigSmall', 
+                'temperatureTh',
+                'humidityBigSmall',
+                'humidityTh',
+                'pressureBigSmall',
+                'pressureTh',
+                'rainfallBigSmall',
+                'rainfallTh',
+                'waterlevelBigSmall',
+                'waterlevelTh'
+            ];
             controls.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.disabled = false;
@@ -150,19 +169,35 @@
         select:disabled,
         button:disabled {cursor: not-allowed;}
 
-        /* 基础样式：确保 body 撑满且颜色切换平滑 */
         html, body {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
-            transition: box-shadow 0.3s ease; /* 让边框出现时有渐变效果 */
+            transition: box-shadow 0.3s ease;
         }
 
-        /* 报警状态：网页外围出现红色内阴影边框 */
-        .alert-active {
-            /* inset 表示内阴影，10px 是宽度，可根据需要调整 */
+        .alert-active::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            
             box-shadow: inset 0 0 0 10px #ef4444 !important;
+            
+            z-index: 9999;     
+
+            pointer-events: none; 
+            
+            box-sizing: border-box;
+            animation: alert-blink 1s infinite;
+        }
+        @keyframes alert-blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
 
     </style>
@@ -189,14 +224,65 @@
                     <option value="rssi">受信電力</option>
                 </select>
             </div>
+            
+            <div class="flex flex-col gap-2 w-full" style="box-sizing: border-box;">
+                <div class="w-full">
+                    <label class="label">2. 関数</label>
+                    <select id="calFunction" class="input" disabled>
+                        <option value="realTime">時系列（ライブ）</option>
+                        <option value="timeSeries">時系列（過去）</option>
+                        <option value="dis_CDF">累積確率分布</option>
+                    </select>
+                </div>
 
-            <div>
-                <label class="label">2. 関数</label>
-                <select id="calFunction" class="input" disabled>
-                    <option value="realTime">時系列（ライブ）</option>
-                    <option value="timeSeries">時系列（過去）</option>
-                    <option value="dis_CDF">累積確率分布</option>
-                </select>
+                <div class="w-full">
+                    <div class="grid grid-cols-2 gap-2" style="display: grid;  box-sizing: border-box;">
+                        <div class="grid mt-2 w-full" style="display: grid; grid-template-columns: 2fr 3fr; gap: 0px 5px; box-sizing: border-box;">
+                            <label class="label" style="grid-column: span 2;">警戒温度 (°C)</label>
+                            <select id="temperatureBigSmall" class="input" style="box-sizing: border-box; width: 100%;" disabled>
+                                <option value="big">></option>
+                                <option value="eqSmall">≤</option>
+                            </select>
+                            <input id="temperatureTh" type="number" class="input" style="box-sizing: border-box; width: 100%;" value="40.0" step="0.1" disabled/>
+                        </div>
+                        
+                        <div class="grid mt-2 w-full" style="display: grid; grid-template-columns: 2fr 3fr; gap: 1px 5px; box-sizing: border-box;">
+                            <label class="label" style="grid-column: span 2;">警戒湿度 (%)</label>
+                            <select id="humidityBigSmall" class="input" style="box-sizing: border-box; width: 100%;" disabled>
+                                <option value="big">></option>
+                                <option value="eqSmall">≤</option>
+                            </select>
+                            <input id="humidityTh" type="number" class="input" style="box-sizing: border-box;" value="1000.0" step="0.1" disabled/>
+                        </div>
+                        
+                        <div class="grid mt-2 w-full" style="display: grid; grid-template-columns: 2fr 3fr; gap: 1px 5px; box-sizing: border-box;">
+                            <label class="label" style="grid-column: span 2;">警戒気圧 (hPa)</label>
+                            <select id="pressureBigSmall" class="input" style="box-sizing: border-box; width: 100%;" disabled>
+                                <option value="big">></option>
+                                <option value="eqSmall">≤</option>
+                            </select>
+                            <input id="pressureTh" type="number" class="input" style="box-sizing: border-box;" value="1000" step="1" disabled/>
+                        </div>
+                        
+                        <div class="grid mt-2 w-full" style="display: grid; grid-template-columns: 2fr 3fr; gap: 1px 5px; box-sizing: border-box;">
+                            <label class="label" style="grid-column: span 2;">警戒雨量</label>
+                            <select id="rainfallBigSmall" class="input" style="box-sizing: border-box; width: 100%;" disabled>
+                                <option value="big">></option>
+                                <option value="eqSmall">≤</option>
+                            </select>
+                            <input id="rainfallTh" type="number" class="input" style="box-sizing: border-box;" value="0.0" step="0.1" disabled/>
+                        </div>
+
+                        <div class="grid mt-2 w-full" style="display: grid; grid-template-columns: 2fr 3fr; gap: 1px 5px; box-sizing: border-box;">
+                            <label class="label" style="grid-column: span 2;">警戒水位</label>
+                            <select id="waterlevelBigSmall" class="input" style="box-sizing: border-box; width: 100%;" disabled>
+                                <option value="big">></option>
+                                <option value="eqSmall">≤</option>
+                            </select>
+                            <input id="waterlevelTh" type="number" class="input" style="box-sizing: border-box;" value="0.0" step="0.1" disabled/>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="flex flex-col gap-2 w-full" style="box-sizing: border-box;">

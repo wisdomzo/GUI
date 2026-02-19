@@ -8,6 +8,16 @@ const loadBtn = document.getElementById('load');
 const resetBtn = document.getElementById('reset');
 const info = document.getElementById('information');
 const staInfo = document.getElementById('statisticsInfo');
+const tempBigSmall = document.getElementById('temperatureBigSmall');
+const tempTh = document.getElementById('temperatureTh');
+const humiBigSmall = document.getElementById('humidityBigSmall');
+const humiTh = document.getElementById('humidityTh');
+const presBigSmall = document.getElementById('pressureBigSmall');
+const presTh = document.getElementById('pressureTh');
+const rfBigSmall = document.getElementById('rainfallBigSmall');
+const rfTh = document.getElementById('rainfallTh');
+const wlBigSmall = document.getElementById('waterlevelBigSmall');
+const wlTh = document.getElementById('waterlevelTh');
 
 const uiControls = [
   metricSelect,
@@ -16,8 +26,26 @@ const uiControls = [
   startInput,
   endInput,
   loadBtn,
-  resetBtn
+  resetBtn,
+  tempBigSmall,
+  tempTh,
+  humiBigSmall,
+  humiTh,
+  presBigSmall,
+  presTh,
+  rfBigSmall,
+  rfTh,
+  wlBigSmall,
+  wlTh
 ];
+
+const metricMap = {
+    "temperature": { bs: tempBigSmall, th: tempTh },
+    "humidity":    { bs: humiBigSmall, th: humiTh },
+    "pressure":    { bs: presBigSmall, th: presTh },
+    "rainfall":    { bs: rfBigSmall,   th: rfTh },
+    "waterLevel":  { bs: wlBigSmall,   th: wlTh }
+  };
 
 // 日時を初期化
 const now = new Date();
@@ -46,6 +74,8 @@ const MAX_REALTIME_POINTS = 20;
 // ユーザ制御
 enableInterface();
 // ドロップダウンの変更を監視する
+updateMetricInputState();
+metricSelect.addEventListener('change', updateMetricInputState);
 updateDateInputState();
 durationSelect.addEventListener('change', updateDateInputState);
 updateCalFunctionState();
@@ -56,6 +86,7 @@ calFunctionSelect.addEventListener('change', () => {
     durationSelect.disabled = false;
     durationSelect.classList.toggle('opacity-50', false);
     updateDateInputState();
+    updateThValueStatus(null, false);
   }
 });
 info.textContent = '[INFO] Initialization complete.';
@@ -73,8 +104,18 @@ loadBtn.onclick = async () => {
     spinner.classList.remove('hidden');
     spinner.classList.add('flex');
   }
+  const target = metricMap[metricSelect.value];
+  const targetBigSmall = target ? target.bs.value : null;
+  const targetThValue  = target ? parseFloat(target.th.value) : NaN;
   try {
-    await analyzeData(metricSelect.value, calFunctionSelect.value, durationSelect.value, startInput.value, endInput.value);
+    await analyzeData(metricSelect.value, 
+      calFunctionSelect.value, 
+      durationSelect.value, 
+      startInput.value, 
+      endInput.value,
+      targetBigSmall,
+      targetThValue
+    );
     setResetUIEnabled(true);
   } catch (err) {
     info.textContent = '[INFO] Execution failed: ' + err.message;
@@ -96,17 +137,20 @@ resetBtn.onclick = () => {
     window.myChartInstance.destroy();
     window.myChartInstance = null; 
   }
-
   stopRealtimeUpdates();
-
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - (60 * 60 * 1000));
   startInput.value = formatToLocalTime(oneHourAgo);
   endInput.value = formatToLocalTime(now);
   durationSelect.value = "fixable";
   setUIEnabled(true);
-  updateDateInputState();
-  updateCalFunctionState();
+  if (calFunctionSelect.value === "realTime") {
+    updateCalFunctionState();
+  } else {
+    updateThValueStatus(null, false);
+    updateDateInputState();
+  }
+  document.body.classList.toggle('alert-active', false);
   staInfo.innerHTML = '';
   info.textContent = '[INFO] Reset complete.';
 }
@@ -120,6 +164,26 @@ resetBtn.onclick = () => {
 /////////////////
 // subFunctions
 /////////////////
+function updateMetricInputState() {
+  const metric = metricSelect.value;
+  const calFun = calFunctionSelect.value;
+  if (calFun === "realTime") {
+    if (metric === "temperature") {
+      updateThValueStatus("temp", true);
+    } else if (metric === "humidity") {
+      updateThValueStatus("humi", true);
+    } else if (metric === "pressure") {
+      updateThValueStatus("pres", true);
+    } else if (metric === "rainfall") {
+      updateThValueStatus("rf", true);
+    } else if (metric === "waterLevel") {
+      updateThValueStatus("wl", true);
+    } else {
+      updateThValueStatus(null, false);
+    }
+  }
+}
+
 function updateDateInputState() {
   const mode = durationSelect.value
   const isFixable = mode === 'fixable'
@@ -135,6 +199,7 @@ function updateDateInputState() {
 function updateCalFunctionState() {
   const calFunction = calFunctionSelect.value;
   const isRealtime = calFunction === 'realTime';
+  const metric = metricSelect.value;
 
   durationSelect.disabled = isRealtime;
   startInput.disabled = isRealtime;
@@ -143,6 +208,47 @@ function updateCalFunctionState() {
   durationSelect.classList.toggle('opacity-50', isRealtime);
   startInput.classList.toggle('opacity-50', isRealtime);
   endInput.classList.toggle('opacity-50', isRealtime);
+
+  if (metric === "temperature") {
+    updateThValueStatus("temp", isRealtime);
+  } else if (metric === "humidity") {
+    updateThValueStatus("humi", isRealtime);
+  } else if (metric === "pressure") {
+    updateThValueStatus("pres", isRealtime);
+  } else if (metric === "rainfall") {
+    updateThValueStatus("rf", isRealtime);
+  } else if (metric === "waterLevel") {
+    updateThValueStatus("wl", isRealtime);
+  }
+}
+
+function updateThValueStatus(activeType, isRealtime) {
+    const groups = {
+        'temp': [tempBigSmall, tempTh],
+        'humi': [humiBigSmall, humiTh],
+        'pres': [presBigSmall, presTh],
+        'rf':   [rfBigSmall,   rfTh],
+        'wl':   [wlBigSmall,   wlTh]
+    };
+
+    for (const key in groups) {
+        const isActive = (key === activeType);
+        const elements = groups[key];
+
+        let shouldDisable;
+        if (activeType === null) {
+            shouldDisable = !isRealtime;
+        } else {
+            shouldDisable = isActive ? !isRealtime : isRealtime;
+        }
+
+        elements.forEach(el => {
+            if (el) {
+                el.disabled = shouldDisable;
+                el.classList.toggle('opacity-50', shouldDisable);
+            }
+        });
+    }
 }
 
 
@@ -162,7 +268,7 @@ function setResetUIEnabled(enabled) {
 }
 
 
-async function analyzeData(metric, calFunction, duration, start, end) {
+async function analyzeData(metric, calFunction, duration, start, end, targetBigSmall, targetThValue) {
 
   if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
     if (calFunction === "timeSeries" || calFunction === "dis_CDF") {
@@ -184,7 +290,7 @@ async function analyzeData(metric, calFunction, duration, start, end) {
         info.textContent = "[INFO] No data within the specified range.";
       }
     } else if (calFunction === "realTime") {
-      await startRealtimeUpdates(metric);
+      await startRealtimeUpdates(metric, targetBigSmall, targetThValue);
       info.textContent = '[INFO] Execution successful.';
     }
   }
@@ -209,9 +315,7 @@ async function analyzeData(metric, calFunction, duration, start, end) {
         info.textContent = "[INFO] No data within the specified range.";
       }
     } else if (calFunction === "realTime") {
-      //未実装
-      await startRealtimeUpdates(metric);
-      //await new Promise(resolve => setTimeout(resolve, 3000));
+      await startRealtimeUpdates(metric, targetBigSmall, targetThValue);
       info.textContent = "[INFO] In development.";
     }
   }
@@ -751,7 +855,7 @@ function updateStatistics(tempStats) {
 
 
 
-async function startRealtimeUpdates(metric) {
+async function startRealtimeUpdates(metric, targetBigSmall, targetThValue) {
   info.textContent = '[INFO] Start updating real-time data.';
   try {
     supabaseClient = initializeSupabase(metric);
@@ -765,7 +869,7 @@ async function startRealtimeUpdates(metric) {
     drawChart(metric, realtimeData);
 
     // リアルタイム購読を設定する
-    setupRealtimeSubscription(metric);
+    setupRealtimeSubscription(metric, targetBigSmall, targetThValue);
     isRealtimeActive = true;
     info.textContent = '[INFO] Real-time update started.';
 
@@ -914,7 +1018,7 @@ async function fetchInitialData(metric) {
 }
 
 
-function setupRealtimeSubscription(metric) {
+function setupRealtimeSubscription(metric, targetBigSmall, targetThValue) {
   if (!supabaseClient) {
     console.error('Supabase クライアント未初期化');
     return;
@@ -958,7 +1062,7 @@ function setupRealtimeSubscription(metric) {
           const filteredData = {};
           selectedColumns.forEach(col => filteredData[col] = payload.new[col]);
           console.log('新しいデータを受信:', filteredData);
-          handleNewData(metric, filteredData);
+          handleNewData(metric, filteredData, targetBigSmall, targetThValue);
         }
       )
       .on(
@@ -994,7 +1098,7 @@ function setupRealtimeSubscription(metric) {
 }
 
 
-function handleNewData(metric, newData) {
+function handleNewData(metric, newData, targetBigSmall, targetThValue) {
   if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
     if (!newData || !newData.created_at) {
       console.warn('空のデータを受信した、またはフォーマットが正しくありません:', newData);
@@ -1040,8 +1144,7 @@ function handleNewData(metric, newData) {
   }
   console.log(`データが更新されました。現在のデータポイント: ${realtimeData.length}/${MAX_REALTIME_POINTS}`);
 
-  console.log("警报函数！！！。");
-  checkDataAndAlert(metric, yValue);
+  checkDataAndAlert(yValue, targetBigSmall, targetThValue);
 
   if (window.myChartInstance) {
     const newChartPoints = realtimeData.map(d => ({
@@ -1056,21 +1159,14 @@ function handleNewData(metric, newData) {
   }
 }
 
-function checkDataAndAlert(metric, yValue) {
-  console.log("警报函数。");
-    let threshold;
-    if (metric === "temperature") {
-      threshold = 10;
-      if (yValue > threshold) {
-        console.log("开启警报！");
-        // 满足条件，添加红框
-        document.body.classList.add('alert-active');
-      } else {
-        console.log("关闭警报！");
-        // 不满足条件，移除红框
-        document.body.classList.remove('alert-active');
-      }
-    }
+function checkDataAndAlert(yValue, targetBigSmall, targetThValue) {
+  let isOverThreshold;
+  if (targetBigSmall === "big") {
+    isOverThreshold = parseFloat(yValue) > targetThValue;
+  } else if (targetBigSmall === "eqSmall") {
+    isOverThreshold = parseFloat(yValue) <= targetThValue;
+  }
+  document.body.classList.toggle('alert-active', isOverThreshold);
 }
 
 
