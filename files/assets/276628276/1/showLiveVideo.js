@@ -127,9 +127,19 @@ ShowLiveVideo.prototype.openZoomOverlay = function() {
     const closeBtn = document.createElement('button');
     closeBtn.innerHTML = '✕ Close';
     closeBtn.style.cssText = `
-        position: absolute; top: -40px; left: 0;
-        background: #ff4444; color: white; border: none;
-        padding: 8px 15px; cursor: pointer; border-radius: 4px;
+        position: absolute; 
+        top: 10px; 
+        left: 10px;
+        background: #ff4444; 
+        color: white; 
+        border: none;
+        padding: 10px 20px; 
+        cursor: pointer; 
+        border-radius: 4px;
+        z-index: 10001; /* 确保在视频上方 */
+        font-family: sans-serif;
+        font-weight: bold;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.5);
     `;
 
     const closeZoom = () => {

@@ -320,10 +320,36 @@ async function analyzeData(metric, calFunction, duration, start, end, targetBigS
     }
   }
 
-  if (metric === "rainfall" || metric === "waterLevel") {
+  if (metric === "rainfall") {
+    if (calFunction === "timeSeries" || calFunction === "dis_CDF") {
+      const data = await supabase2Data(metric, duration, start, end);
+      if (data && data.length > 0) {
+        if (calFunction === "timeSeries") {
+          drawChart_rainFall(metric, data);
+          info.textContent = '[INFO] Execution successful.';
+        } else if (calFunction === "dis_CDF") {
+          const cdfResult = calculateCDFData(data);
+          if (cdfResult && cdfResult.temp.length > 0) {
+            drawCDFChart(metric, cdfResult.temp);
+            updateCDFStatistics(cdfResult.tempStats);
+            info.textContent = '[INFO] Execution successful.';
+          }
+        }
+      } else {
+        if (window.myChartInstance) window.myChartInstance.destroy();
+        info.textContent = "[INFO] No data within the specified range.";
+      }
+    } else if (calFunction === "realTime") {
+      await startRealtimeUpdates(metric, targetBigSmall, targetThValue);
+      info.textContent = '[INFO] Execution successful.';
+    }
+  }
+
+  if (metric === "waterLevel") {
     await new Promise(resolve => setTimeout(resolve, 3000));
     info.textContent = "[INFO] In development.";
   }
+
   return "分析完了";
 }
 
@@ -340,6 +366,10 @@ async function supabase2Data(metric, duration, start, end) {
     supabaseUrl = AppConfig.SUPABASE2.URL;
     apiKey = AppConfig.SUPABASE2.API_KEY;
     tableName = AppConfig.SUPABASE2.TABLE_NAME;
+  } else if (metric === "rainfall") {
+    supabaseUrl = AppConfig.SUPABASE3.URL;
+    apiKey = AppConfig.SUPABASE3.API_KEY;
+    tableName = AppConfig.SUPABASE3.TABLE_NAME;
   }
   
   let startDate;
@@ -419,6 +449,15 @@ async function supabase2Data(metric, duration, start, end) {
       } else {
         params.append('order', 'created_at.desc');
       }
+    } else if (metric == "rainfall") {
+      params.append('select', 'created_at, rain');
+      params.append('created_at', `gte.${startTimeISO}`);
+      params.append('created_at', `lte.${endTimeISO}`);
+      if (duration === "fixable") {
+        params.append('order', 'created_at.asc');
+      } else {
+        params.append('order', 'created_at.desc');
+      }
     }
     params.append('limit', '10000');
 
@@ -457,20 +496,22 @@ async function supabase2Data(metric, duration, start, end) {
       let dateObj = null;
       if (metric == "rssi") {
         dateObj = new Date(row.datetime);
-      } else if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
+      } else if (metric === "temperature" || metric === "humidity" || metric === "pressure" || metric === "rainfall") {
         dateObj = new Date(row.created_at);
       }
         
       // パラメータはすべて数値型である
       let targetValue;
-      if (metric == "temperature") {
+      if (metric === "temperature") {
         targetValue = parseFloat(row.temp);
-      } else if (metric == "humidity") {
+      } else if (metric === "humidity") {
         targetValue = parseFloat(row.humi);
-      } else if (metric == "pressure") {
+      } else if (metric === "pressure") {
         targetValue = parseFloat(row.pressure);
-      } else if (metric == "rssi") {
+      } else if (metric === "rssi") {
         targetValue = parseFloat(row.rx_rssi);
+      } else if (metric === "rainfall") {
+        targetValue = parseFloat(row.rain);
       }
         
       // 无効なデータをスキップする
@@ -574,6 +615,167 @@ function drawChart(label, rawData) {
             color: '#94a3b8'
           },
           beginAtZero: false,
+        }
+      },
+      plugins: {
+        zoom: {
+          limits: {
+            y: {
+              min: 'original', // ズームを許可する最小値。「original」は初期表示時の最小値を意味します
+              max: 'original', // ズームを許可する最大値
+            }
+          },
+          zoom: {
+            wheel: { enabled: true },
+            pinch: { enabled: true },
+            mode: 'y',
+            scaleMode: 'y',
+            speed: 0.01
+          },
+          pan: {
+            enabled: true,       // パン（移動）を許可する
+            mode: 'y',           // 垂直方向のパンのみ許可する
+          }
+        },
+        legend: {
+          labels: { color: '#f1f5f9' }
+        },
+        tooltip: {
+          enabled: true,
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#f1f5f9'
+        }
+      }
+    }
+  });
+
+  const yValues = rawData.map(d => d[1]);
+  const tempStats = StatisticsUtils.calculateAllStats(yValues);
+  updateStatistics(tempStats);
+}
+
+/**
+ * Chart.js を使用して折れ線グラフを描画します
+ * @param {string} label - データのラベル（例：温度、湿度）
+ * @param {Array} rawData - 形式：[[日付, 値], ...] の配列
+ */
+function drawChart_rainFall(label, rawData) {
+  if (label === "rainfall") {
+    label = "雨量 (mm)";
+  }
+
+  // --- 1. データ前処理：累積雨量の計算 ---
+  // 補助関数：指定した時間ウィンドウ内の雨量の合計を計算する
+  const getAccumulatedRain = (data, currentTime, windowMs) => {
+    const startTime = currentTime - windowMs;
+    return data
+      .filter(d => d[0] > startTime && d[0] <= currentTime)
+      .reduce((sum, d) => sum + d[1], 0);
+  };
+
+  const chartPoints = rawData.map(d => ({
+    x: d[0],
+    y: d[1]
+  }));
+
+  // 60分累積 (60 * 60 * 1000 ms)
+  const rain60MinPoints = rawData.map(d => ({
+    x: d[0],
+    y: parseFloat(getAccumulatedRain(rawData, d[0], 60 * 60 * 1000).toFixed(2))
+  }));
+  // 24時間累積 (24 * 60 * 60 * 1000 ms)
+  const rain24HourPoints = rawData.map(d => ({
+    x: d[0],
+    y: parseFloat(getAccumulatedRain(rawData, d[0], 24 * 60 * 60 * 1000).toFixed(2))
+  }));
+
+  // --- 2. グラフを描画する ---
+  const ctx = document.getElementById('myChart').getContext('2d');
+
+  // 3. 古いチャートインスタンスを破棄します（重要：ロードを複数回クリックした後のチャートの重複やホバーエラーを防ぐため）
+  if (window.myChartInstance) {
+    window.myChartInstance.destroy();
+  }
+
+  // 4. 新しいチャートを作成します
+  window.myChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: label,
+          data: chartPoints,
+          borderColor: '#06b6d4',
+          backgroundColor: 'rgba(6, 182, 212, 0.1)',
+          borderWidth: 2,
+          pointRadius: 1,
+          pointHoverRadius: 5,
+          tension: 0.2,           // 曲線の滑らかさ
+          fill: true              // 面積塗りつぶしを有効にする
+        },
+        {
+          label: '60分累積雨量 (mm)',
+          data: rain60MinPoints,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 1,
+          pointHoverRadius: 5,
+          tension: 0.2,
+          fill: false,
+          hidden: false // 默认显示
+        },
+        {
+          label: '24時間累積雨量 (mm)',
+          data: rain24HourPoints,
+          borderColor: '#ef4444', // 红色
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 1,
+          pointHoverRadius: 5,
+          tension: 0.2,
+          fill: false,
+          hidden: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false, // .chart-container の高さに適合させる
+      interaction: {
+        intersect: false,
+        mode: 'index',
+      },
+      scales: {
+        x: {
+          type: 'time', // chartjs-adapter-date-fns が読み込まれていることを必ず確認してください
+          time: {
+            displayFormats: {
+              minute: 'HH:mm',
+              hour: 'MM/dd HH:mm',
+              day: 'MM/dd'
+            }
+          },
+          grid: {
+            color: 'rgba(255, 255, 255, 0.05)'
+          },
+          title: {
+            display: true,
+            text: '時間',
+            color: '#94a3b8'
+          }
+        },
+        y: {
+          grid: {
+            color: 'rgba(255, 255, 255, 0.05)'
+          },
+          title: {
+            display: true,
+            text: label,
+            color: '#94a3b8'
+          },
+          beginAtZero: true,
         }
       },
       plugins: {
@@ -866,7 +1068,11 @@ async function startRealtimeUpdates(metric, targetBigSmall, targetThValue) {
 
     // 最新 20 件を初期表示データとして取得します。
     await fetchInitialData(metric);
-    drawChart(metric, realtimeData);
+    if (metric === "rainfall") {
+      drawChart_rainFall(metric, realtimeData);
+    } else {
+      drawChart(metric, realtimeData);
+    }
 
     // リアルタイム購読を設定する
     setupRealtimeSubscription(metric, targetBigSmall, targetThValue);
@@ -902,6 +1108,9 @@ function initializeSupabase(metric) {
   } else if (metric === "rssi") {
     supabaseUrl = AppConfig.SUPABASE1.URL;
     apiKey = AppConfig.SUPABASE1.API_KEY;
+  } else if (metric === "rainfall") {
+    supabaseUrl = AppConfig.SUPABASE3.URL;
+    apiKey = AppConfig.SUPABASE3.API_KEY;
   }
 
   try {
@@ -931,6 +1140,10 @@ async function fetchInitialData(metric) {
     supabaseUrl = AppConfig.SUPABASE1.URL;
     apiKey = AppConfig.SUPABASE1.API_KEY;
     tableName = AppConfig.SUPABASE1.TABLE_NAME;
+  } else if (metric === "rainfall") {
+    supabaseUrl = AppConfig.SUPABASE3.URL;
+    apiKey = AppConfig.SUPABASE3.API_KEY;
+    tableName = AppConfig.SUPABASE3.TABLE_NAME;
   }
 
   try {
@@ -947,6 +1160,9 @@ async function fetchInitialData(metric) {
     } else if (metric === "rssi") {
       params.append('select', 'datetime, rx_rssi');
       params.append('order', 'datetime.desc');
+    } else if (metric === "rainfall") {
+      params.append('select', 'created_at, rain');
+      params.append('order', 'created_at.desc');
     }
     params.append('limit', MAX_REALTIME_POINTS);
 
@@ -971,7 +1187,7 @@ async function fetchInitialData(metric) {
     // データ形式を変換して並べ替える
     realtimeData = data.map(row => {
       let dateObj;
-      if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
+      if (metric === "temperature" || metric === "humidity" || metric === "pressure" || metric === "rainfall") {
         dateObj = new Date(row.created_at);
       } else if (metric === "rssi") {
         dateObj = new Date(row.datetime);
@@ -1005,6 +1221,13 @@ async function fetchInitialData(metric) {
           return null;
         }
         return [dateObj, rssiValue];
+      } else if (metric === "rainfall") {
+        const rainValue = parseFloat(row.rain);
+        if (isNaN(dateObj.getTime()) || isNaN(rainValue)) {
+          console.warn('無効なデータ:', row);
+          return null;
+        }
+        return [dateObj, rainValue];
       }
     }).filter(item => item !== null);
 
@@ -1029,6 +1252,8 @@ function setupRealtimeSubscription(metric, targetBigSmall, targetThValue) {
     tableName = AppConfig.SUPABASE2.TABLE_NAME;
   } else if (metric === "rssi") {
     tableName = AppConfig.SUPABASE1.TABLE_NAME;
+  } else if (metric === "rainfall") {
+    tableName = AppConfig.SUPABASE3.TABLE_NAME;
   }
   
   let selectedColumns = null;
@@ -1040,6 +1265,8 @@ function setupRealtimeSubscription(metric, targetBigSmall, targetThValue) {
     selectedColumns = ['created_at', 'pressure'];
   } else if (metric === "rssi") {
     selectedColumns = ['datetime', 'rx_rssi'];
+  } else if (metric === "rainfall") {
+    selectedColumns = ['created_at', 'rain'];
   }
 
   try {
@@ -1099,7 +1326,7 @@ function setupRealtimeSubscription(metric, targetBigSmall, targetThValue) {
 
 
 function handleNewData(metric, newData, targetBigSmall, targetThValue) {
-  if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
+  if (metric === "temperature" || metric === "humidity" || metric === "pressure" || metric === "rainfall") {
     if (!newData || !newData.created_at) {
       console.warn('空のデータを受信した、またはフォーマットが正しくありません:', newData);
       return;
@@ -1113,7 +1340,7 @@ function handleNewData(metric, newData, targetBigSmall, targetThValue) {
 
   // 新しいデータの形式を変換する
   let dateObj;
-  if (metric === "temperature" || metric === "humidity" || metric === "pressure") {
+  if (metric === "temperature" || metric === "humidity" || metric === "pressure" || metric === "rainfall") {
     dateObj = new Date(newData.created_at);
   } else if (metric === "rssi") {
     dateObj = new Date(newData.datetime);
@@ -1128,6 +1355,8 @@ function handleNewData(metric, newData, targetBigSmall, targetThValue) {
     yValue = parseFloat(newData.pressure);
   } else if (metric === "rssi") {
     yValue = parseFloat(newData.rx_rssi);
+  } else if (metric === "rainfall") {
+    yValue = parseFloat(newData.rain);
   }
 
   if (isNaN(dateObj.getTime()) || isNaN(yValue)) {
@@ -1238,6 +1467,9 @@ async function sendSimpleHeartbeat(metric) {
   } else if (metric === "rssi") {
     tableName = AppConfig.SUPABASE1.TABLE_NAME;
     title = 'datetime';
+  } else if (metric === "rainfall") {
+    tableName = AppConfig.SUPABASE3.TABLE_NAME;
+    title = 'created_at';
   }
 
   try {

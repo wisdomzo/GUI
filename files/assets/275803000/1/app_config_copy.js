@@ -11,6 +11,13 @@ var AppConfig = {
         URL: 'https://wvkrhkfrineapeazuhxg.supabase.co',
         API_KEY: 'sb_publishable_xwHFt6XIkkhJHTEOHChZ_w_6bRbxXL7',
         TABLE_NAME: 'iot_data'
+    },
+
+    // 吉村先生のデータベース
+    SUPABASE3: {
+        URL: 'https://wvkrhkfrineapeazuhxg.supabase.co',
+        API_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind2a3Joa2ZyaW5lYXBlYXp1aHhnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzNTIxNDcsImV4cCI6MjA4MzkyODE0N30.hSeH5Onii9aVLdx794vz5js2TlMfpExGq47PkYNBszw',
+        TABLE_NAME: 'rain_data'
     }
 };
 
