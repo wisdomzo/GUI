@@ -19,6 +19,21 @@ FlyDownButton2.prototype.onClick = function() {
     if (this.isProcessingClick) return;
     
     this.isProcessingClick = true;
+
+    const entitiesToHide = ['3DUIGraph'];
+    entitiesToHide.forEach(entityName => {
+        const entity = this.app.root.findByName(entityName);
+        if (entity) {
+            entity.enabled = false;
+        }
+    });
+    const entitiesToOpen = ['ShowGraphButton'];
+    entitiesToOpen.forEach(entityName => {
+        const entity = this.app.root.findByName(entityName);
+        if (entity) {
+            entity.enabled = true;
+        }
+    });
     
     this.app.fire('camera2:flydown:start');
     

@@ -1,16 +1,17 @@
-var DownloadDataTemp = pc.createScript('downloadDataTemp');
+var DownloadDataRain = pc.createScript('downloadDataRain');
 
 // initialize code called once per entity
-DownloadDataTemp.prototype.initialize = function() {
-    this.graph = this.app.root.findByName('3DUIGraph_temp');
-    this.chartCanvas = this.graph.findByName('ChartCanvas_temp');
+DownloadDataRain.prototype.initialize = function() {
+    this.graph = this.app.root.findByName('3DUIGraph_rain');
+    this.chartCanvas = this.graph.findByName('ChartCanvas_rain');
 
     // クリックイベントをバインドする
     this.entity.button.on('click', this.handleClick, this);
 
 };
 
-DownloadDataTemp.prototype.handleClick = async function() {
+
+DownloadDataRain.prototype.handleClick = async function() {
     const startDate = await GetTimeTools.getTime('開始時間を入力してください（デフォルト：1時間前）');
     const endDate = await GetTimeTools.getTime('終了時間を入力してください（デフォルト：現在）', true);
 
@@ -21,10 +22,11 @@ DownloadDataTemp.prototype.handleClick = async function() {
     }
 };
 
-DownloadDataTemp.prototype.fetchDataFromSupabase = async function(startDate, endDate) {
-    const supabaseUrl = AppConfig.SUPABASE2.URL;
-    const apiKey = AppConfig.SUPABASE2.API_KEY;
-    const tableName = AppConfig.SUPABASE2.TABLE_NAME;
+
+DownloadDataRain.prototype.fetchDataFromSupabase = async function(startDate, endDate) {
+    const supabaseUrl = AppConfig.SUPABASE3.URL;
+    const apiKey = AppConfig.SUPABASE3.API_KEY;
+    const tableName = AppConfig.SUPABASE3.TABLE_NAME;
 
     if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
         console.error('startDateとendDate は Date 型でなければなりません。');
@@ -44,7 +46,7 @@ DownloadDataTemp.prototype.fetchDataFromSupabase = async function(startDate, end
         const endTimeISO = endDate.toISOString();
 
         const params = new URLSearchParams();
-        params.append('select', 'created_at, temp, humi, pressure');
+        params.append('select', 'created_at, rain');
         params.append('created_at', `gte.${startTimeISO}`);
         params.append('created_at', `lte.${endTimeISO}`);
         params.append('order', 'created_at.asc');
@@ -81,27 +83,43 @@ DownloadDataTemp.prototype.fetchDataFromSupabase = async function(startDate, end
 
         const result = data.map(row => {
             const created_at = new Date(row.created_at);
-            const temp = parseFloat(row.temp);
-            const humi = parseFloat(row.humi);
-            const pressure = parseFloat(row.pressure);
+            const rain = parseFloat(row.rain);
             
-            if (isNaN(created_at.getTime()) || isNaN(temp) || 
-                isNaN(humi) || isNaN(pressure)) {
+            if (isNaN(created_at.getTime()) || isNaN(rain)) {
                 console.warn('無効なデータ行をスキップする:', row);
                 return null;
             }
-            
+
             return {
                 created_at: created_at,
-                temp: temp,
-                humi: humi,
-                pressure: pressure,
+                rain: rain,
             };
         }).filter(item => item !== null);
 
         console.log(`処理後の有効データ: ${result.length} 件`);
-        
-        return result;
+
+        const rainData = [];
+        const rainData_1h = [];
+        const rainData_24h = [];
+
+        const getAccumulatedRain = (dataList, currentTime, windowMs) => {
+            const startTime = currentTime - windowMs;
+            return dataList
+                .filter(d => d.created_at > startTime && d.created_at <= currentTime)
+                .reduce((sum, d) => sum + d.rain, 0);
+        };
+
+        return result.map(item => {
+            const currentTime = item.created_at;
+            const r1h = getAccumulatedRain(result, currentTime, 60 * 60 * 1000);
+            const r24h = getAccumulatedRain(result, currentTime, 24 * 60 * 60 * 1000);
+            return {
+                created_at: currentTime,
+                rain: item.rain,
+                rain_1h: parseFloat(r1h.toFixed(2)),
+                rain_24h: parseFloat(r24h.toFixed(2))
+            };
+        });
 
     } catch (error) {
         console.error('データ取得中に例外が発生しました:', error);
@@ -110,7 +128,8 @@ DownloadDataTemp.prototype.fetchDataFromSupabase = async function(startDate, end
     }
 };
 
-DownloadDataTemp.prototype.downloadDataAsCSV = async function(data) {
+
+DownloadDataRain.prototype.downloadDataAsCSV = async function(data) {
     if (!data || data.length === 0) {
         alert('ダウンロードするデータがありません。');
         return;
@@ -129,7 +148,7 @@ DownloadDataTemp.prototype.downloadDataAsCSV = async function(data) {
             String(now.getMinutes()).padStart(2, '0') + 
             String(now.getSeconds()).padStart(2, '0');
         
-        const defaultFileName = `iot_data_${timestamp}.zip`;
+        const defaultFileName = `rainfall_data_${timestamp}.zip`;
         
         // 2. ファイル保存ダイアログを表示
         const fileName = await this.showSaveDialog(defaultFileName);
@@ -159,13 +178,14 @@ DownloadDataTemp.prototype.downloadDataAsCSV = async function(data) {
     }
 };
 
-DownloadDataTemp.prototype.convertToCSV = function(data) {
+
+DownloadDataRain.prototype.convertToCSV = function(data) {
     // ヘッダー行（日本語）
     const headers = [
         'created_at',
-        'temp',
-        'humi',
-        'pressure'
+        'rain',
+        'rain_1h',
+        'rain_24h'
     ];
     
     // データ行を生成
@@ -182,9 +202,9 @@ DownloadDataTemp.prototype.convertToCSV = function(data) {
         // CSV行を生成（カンマ区切り、文字列はダブルクォートで囲む）
         return [
             `"${datetimeStr}"`,
-            item.temp.toString(),
-            item.humi.toString(),
-            item.pressure.toString()
+            item.rain.toString(),
+            item.rain_1h.toString(),
+            item.rain_24h.toString()
         ].join(',');
     });
     
@@ -192,20 +212,22 @@ DownloadDataTemp.prototype.convertToCSV = function(data) {
     return [headers.join(','), ...rows].join('\n');
 };
 
-DownloadDataTemp.prototype.convertToJSON = function(data) {
+
+DownloadDataRain.prototype.convertToJSON = function(data) {
     // JSON形式に変換
     const jsonData = data.map(item => ({
         created_at: item.created_at.toISOString(),
-        temp: item.temp,
-        humi: item.humi,
-        pressure: item.pressure
+        rain: item.rain,
+        rain_1h: item.rain_1h,
+        rain_24h: item.rain_24h
     }));
     
     return JSON.stringify(jsonData, null, 2); // フォーマットされたJSON
 };
 
+
 // ファイル保存ダイアログを表示する関数
-DownloadDataTemp.prototype.showSaveDialog = function(defaultFileName) {
+DownloadDataRain.prototype.showSaveDialog = function(defaultFileName) {
     return new Promise((resolve) => {
         // ダイアログを作成
         const dialog = document.createElement('div');
@@ -316,8 +338,9 @@ DownloadDataTemp.prototype.showSaveDialog = function(defaultFileName) {
     });
 };
 
+
 // ファイルダウンロード実行関数
-DownloadDataTemp.prototype.downloadFile = function(content, fileName, mimeType) {
+DownloadDataRain.prototype.downloadFile = function(content, fileName, mimeType) {
     // Blobを作成
     const blob = new Blob([content], { type: mimeType });
     

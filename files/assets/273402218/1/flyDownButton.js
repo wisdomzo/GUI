@@ -35,7 +35,7 @@ FlyDownButton.prototype.onClick = function() {
             entity.enabled = false;
         }
     });
-    const entitiesToOpen = ['ShowGraphButton', 'ShowGraphButton_temp'];
+    const entitiesToOpen = ['ShowGraphButton_rain', 'ShowGraphButton_temp'];
     entitiesToOpen.forEach(entityName => {
         const entity = this.app.root.findByName(entityName);
         if (entity) {

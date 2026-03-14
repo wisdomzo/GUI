@@ -40,6 +40,14 @@ ReturnToOverviewButton2.prototype.onClick = function() {
     this.isProcessingClick = true;
     this.addClickFeedback();
     this.entity.enabled = false;
+
+    const entitiesToHide = ['3DUIGraph', 'ShowGraphButton'];
+    entitiesToHide.forEach(entityName => {
+        const entity = this.app.root.findByName(entityName);
+        if (entity) {
+            entity.enabled = false;
+        }
+    });
     
     setTimeout(() => {
         this.app.fire('camera2:reset');

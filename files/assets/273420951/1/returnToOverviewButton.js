@@ -54,7 +54,7 @@ ReturnToOverviewButton.prototype.onClick = function() {
 
     this.entity.enabled = false;
 
-    const entitiesToHide = ['3DUIGraph', '3DUIGraph_temp', 'ShowGraphButton', 'ShowGraphButton_temp'];
+    const entitiesToHide = ['3DUIGraph_rain', '3DUIGraph_temp', 'ShowGraphButton_rain', 'ShowGraphButton_temp'];
     entitiesToHide.forEach(entityName => {
         const entity = this.app.root.findByName(entityName);
         if (entity) {
