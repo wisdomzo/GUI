@@ -148,13 +148,14 @@ loadBtn.onclick = async () => {
 
 // リセットボタンがアクティブになった後
 resetBtn.onclick = () => {
-  if (window.myChartInstance) {
-    window.myChartInstance.destroy();
-    window.myChartInstance = null; 
-  }
+  isRealtimeActive = false;
   if (window.alarmAudio) {
     window.alarmAudio.pause();
     window.alarmAudio.currentTime = 0;
+  }
+  if (window.myChartInstance) {
+    window.myChartInstance.destroy();
+    window.myChartInstance = null; 
   }
   stopRealtimeUpdates();
   const now = new Date();
@@ -1408,6 +1409,15 @@ function handleNewData(metric, newData, targetBigSmall, targetThValue) {
 }
 
 function checkDataAndAlert(yValue, targetBigSmall, targetThValue) {
+
+  if (!isRealtimeActive) {
+    if (!alarmAudio.paused) {
+      alarmAudio.pause();
+      alarmAudio.currentTime = 0;
+    }
+    return; 
+  }
+
   let isOverThreshold;
   if (targetBigSmall === "big") {
     isOverThreshold = parseFloat(yValue) > targetThValue;
@@ -1436,6 +1446,7 @@ function checkDataAndAlert(yValue, targetBigSmall, targetThValue) {
 
 function stopRealtimeUpdates() {
   console.log('リアルタイム更新を停止');
+  isRealtimeActive = false;
 
   // ハードビットが停止
   if (heartbeatTimer) {
@@ -1466,7 +1477,6 @@ function stopRealtimeUpdates() {
     subscription = null;
     //supabaseClient = null;
   }
-  isRealtimeActive = false;
   console.log('リアルタイム更新が完全に停止しました');
 }
 
