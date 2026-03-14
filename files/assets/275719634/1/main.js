@@ -1,5 +1,5 @@
 // 定義
-const alarmAudio = new Audio('/alarm.wav');
+const alarmAudio = new Audio('./alarm.wav');
 alarmAudio.loop = true;
 alarmAudio.load();
 

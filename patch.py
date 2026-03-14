@@ -66,7 +66,7 @@ def organize_playcanvas_assets():
                                 if os.path.exists(dest_id_dir):
                                     shutil.rmtree(dest_id_dir)
                                 if target_name == "alarm.wav":
-                                    shutil.copytree(src_id_dir+"/1", root_dir, dirs_exist_ok=True)
+                                    shutil.copytree(src_id_dir+"/1", dataPanelAddress, dirs_exist_ok=True)
                                 else:
                                     shutil.copytree(src_id_dir, dest_id_dir)
                                 
