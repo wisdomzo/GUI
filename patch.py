@@ -11,7 +11,7 @@ def organize_playcanvas_assets():
     target_filenames = [
         "chart.umd.js", "tailwind-v3.css", "main.js", "StatisticsUtils_copy.js",
         "app_config_copy.js", "chartjs-adapter-date-fns.bundle.min.js", 
-        "chartjs-plugin-zoom.js", "supabase.js"
+        "chartjs-plugin-zoom.js", "supabase.js", "alarm.wav"
     ]
 
     if not os.path.exists(config_file):
@@ -65,7 +65,10 @@ def organize_playcanvas_assets():
                             if os.path.exists(src_id_dir):
                                 if os.path.exists(dest_id_dir):
                                     shutil.rmtree(dest_id_dir)
-                                shutil.copytree(src_id_dir, dest_id_dir)
+                                if target_name == "alarm.wav":
+                                    shutil.copytree(src_id_dir+"/1", root_dir, dirs_exist_ok=True)
+                                else:
+                                    shutil.copytree(src_id_dir, dest_id_dir)
                                 
                                 copied_rel_path = f"{target_assets_dir}/{asset_id}/{version_num}/{target_name}"
                                 readme_entries.append({

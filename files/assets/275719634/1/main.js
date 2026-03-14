@@ -1,4 +1,19 @@
 // 定義
+const alarmAudio = new Audio('/alarm.wav');
+alarmAudio.loop = true;
+alarmAudio.load();
+
+const unlockAudio = () => {
+    alarmAudio.play().then(() => {
+        alarmAudio.pause();
+        console.log("音声権限が有効になりました。");
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+    }).catch(e => console.warn("有効な操作を待機中、音声を有効化します…", e));
+};
+document.addEventListener('click', unlockAudio);
+document.addEventListener('keydown', unlockAudio);
+
 const metricSelect = document.getElementById('metric');
 const calFunctionSelect = document.getElementById('calFunction');
 const durationSelect = document.getElementById('duration');
@@ -136,6 +151,10 @@ resetBtn.onclick = () => {
   if (window.myChartInstance) {
     window.myChartInstance.destroy();
     window.myChartInstance = null; 
+  }
+  if (window.alarmAudio) {
+    window.alarmAudio.pause();
+    window.alarmAudio.currentTime = 0;
   }
   stopRealtimeUpdates();
   const now = new Date();
@@ -1396,6 +1415,22 @@ function checkDataAndAlert(yValue, targetBigSmall, targetThValue) {
     isOverThreshold = parseFloat(yValue) <= targetThValue;
   }
   document.body.classList.toggle('alert-active', isOverThreshold);
+  
+  if (isOverThreshold) {
+    if (alarmAudio.paused) {
+      alarmAudio.play().then(() => {
+          console.log("警告音の再生に成功しました。🔔");
+      }).catch(error => {
+          console.warn("警告が発動しましたが、ブラウザにブロックされました。ページの空白部分を一度クリックしてください。！", error);
+      });
+    }
+  } else {
+    if (!alarmAudio.paused) {
+      alarmAudio.pause();
+      alarmAudio.currentTime = 0; 
+      console.log("警告を解除し、再生を停止します。");
+    }
+  }
 }
 
 
