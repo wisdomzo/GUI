@@ -149,9 +149,9 @@ loadBtn.onclick = async () => {
 // リセットボタンがアクティブになった後
 resetBtn.onclick = () => {
   isRealtimeActive = false;
-  if (window.alarmAudio) {
-    window.alarmAudio.pause();
-    window.alarmAudio.currentTime = 0;
+  if (alarmAudio) {
+    alarmAudio.pause();
+    alarmAudio.currentTime = 0;
   }
   if (window.myChartInstance) {
     window.myChartInstance.destroy();
@@ -1079,6 +1079,7 @@ function updateStatistics(tempStats) {
 
 async function startRealtimeUpdates(metric, targetBigSmall, targetThValue) {
   info.textContent = '[INFO] Start updating real-time data.';
+  isRealtimeActive = true;
   try {
     supabaseClient = initializeSupabase(metric);
     if (!supabaseClient) {
@@ -1096,7 +1097,6 @@ async function startRealtimeUpdates(metric, targetBigSmall, targetThValue) {
 
     // リアルタイム購読を設定する
     setupRealtimeSubscription(metric, targetBigSmall, targetThValue);
-    isRealtimeActive = true;
     info.textContent = '[INFO] Real-time update started.';
 
     // ハートビートメカニズムを起動する
@@ -1346,6 +1346,9 @@ function setupRealtimeSubscription(metric, targetBigSmall, targetThValue) {
 
 
 function handleNewData(metric, newData, targetBigSmall, targetThValue) {
+
+  if (!isRealtimeActive) return;
+
   if (metric === "temperature" || metric === "humidity" || metric === "pressure" || metric === "rainfall") {
     if (!newData || !newData.created_at) {
       console.warn('空のデータを受信した、またはフォーマットが正しくありません:', newData);
@@ -1414,6 +1417,7 @@ function checkDataAndAlert(yValue, targetBigSmall, targetThValue) {
     if (!alarmAudio.paused) {
       alarmAudio.pause();
       alarmAudio.currentTime = 0;
+      document.body.classList.remove('alert-active');
     }
     return; 
   }
