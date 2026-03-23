@@ -2,7 +2,7 @@ var ShowLiveVideo = pc.createScript('showLiveVideo');
 
 ShowLiveVideo.attributes.add('videoUrl', {
     type: 'string', 
-    default: 'https://res.cloudinary.com/demo/video/upload/dog.mp4' 
+    default: 'https://res.cloudinary.com/demo/video/upload/ac_none/dog.mp4'
 });
 
 // initialize code called once per entity
@@ -27,7 +27,7 @@ ShowLiveVideo.prototype.initialize = function() {
     this.video.src = finalUrl;
     this.video.crossOrigin = 'anonymous';
     this.video.loop = true;
-    this.video.muted = false;
+    this.video.muted = true;
     this.video.volume = 1.0;
     this.video.playsInline = true;
 
@@ -79,7 +79,7 @@ ShowLiveVideo.prototype.toggle = function() {
     this.chartCanvas.enabled = this.visible;
 
     if (this.visible) {
-        this.video.muted = false;
+        this.video.muted = true;
         this.video.play().catch(function(e) {
             console.warn("自動再生がブロックされました:", e);
         });
